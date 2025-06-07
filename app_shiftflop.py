@@ -1,44 +1,32 @@
 import streamlit as st
-from calculate_winrate_detailed_v2 import simulate_shift_flop_with_ranking
-from opponent_hand_combos import opponent_hand_combos
-from hand_utils import all_starting_hands
 import pandas as pd
-import os
+from calculate_winrate_detailed_v2 import simulate_shiftflop_montecarlo
+from flop_generator import generate_flops_by_type
+from hand_utils import all_starting_hands
+import datetime
 
-# タイトル
-st.title("ShiftFlop 勝率変動ランキング + 特徴量分析")
+st.title("ShiftFlop: 勝率変動シミュレーター（モンテカルロ方式）")
 
 # 自分のハンド選択
-hand = st.selectbox("自分のハンドを選択", all_starting_hands)
+hand_str = st.selectbox("自分のハンドを選択", all_starting_hands)
 
 # フロップタイプ選択
 flop_type = st.selectbox("フロップタイプを選択", [
-    "High Card", "Paired", "Connected", "Suited", "Low", "Draw Heavy", "Rainbow"
+    "High Rainbow", "Low Connected", "Paired", "Monotone", "Two Tone", "Wet", "Dry"
 ])
 
-# フロップ数（抽出数）選択
-flop_count = st.selectbox("分析に使うフロップの枚数", [10, 20, 30])
+# モンテカルロ試行回数選択
+mc_trials = st.selectbox("モンテカルロ試行回数", [1000, 5000, 10000, 20000])
 
-# モンテカルロ試行数選択
-monte_carlo_trials = st.selectbox("モンテカルロ試行数（1フロップにつき）", [1000, 5000, 10000])
+if st.button("シミュレーション実行"):
+    with st.spinner("計算中..."):
+        result_df = simulate_shiftflop_montecarlo(hand_str, flop_type, mc_trials)
+        st.dataframe(result_df)
 
-# 計算開始ボタン
-if st.button("ShiftFlop 計算開始"):
-    st.write("計算中です...")
-    avg_shift, top10, worst10, flop_details = simulate_shift_flop_with_ranking(
-        hand, flop_type, flop_count, monte_carlo_trials, opponent_hand_combos
-    )
-
-    st.success(f"平均勝率変動: {avg_shift:.2f}%")
-
-    st.subheader("勝率上昇 Top 10")
-    st.table(top10)
-
-    st.subheader("勝率下降 Worst 10")
-    st.table(worst10)
-
-    # CSV保存
-    csv_df = pd.DataFrame(flop_details, columns=["Flop", "Shift", "Feature"])
-    filename = f"shiftflop_{hand}_{flop_type.replace(' ', '')}.csv"
-    csv_df.to_csv(filename, index=False)
-    st.success(f"CSVファイル {filename} を保存しました。")
+        # CSV保存機能
+        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_path = f"shiftflop_{hand_str}_{flop_type}_{mc_trials}_{now}.csv"
+        result_df.to_csv(csv_path, index=False)
+        st.success(f"結果をCSVで保存しました: {csv_path}")
+        with open(csv_path, "rb") as f:
+            st.download_button("📥 CSVをダウンロード", f, file_name=csv_path)
