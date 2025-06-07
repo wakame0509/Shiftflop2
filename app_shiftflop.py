@@ -1,29 +1,44 @@
 import streamlit as st
-from calculate_shiftflop import simulate_shift_flop
-from hand_utils import all_starting_hands
+from calculate_winrate_detailed_v2 import simulate_shift_flop_with_ranking
 from opponent_hand_combos import opponent_hand_combos
-from flop_generator import generate_flops_by_type
+from hand_utils import all_starting_hands
+import pandas as pd
+import os
 
-st.title("ShiftFlop: フロップタイプによる勝率変動")
+# タイトル
+st.title("ShiftFlop 勝率変動ランキング + 特徴量分析")
 
-# 自分のハンドを169通りから選択
+# 自分のハンド選択
 hand = st.selectbox("自分のハンドを選択", all_starting_hands)
 
-# フロップタイプを選択
+# フロップタイプ選択
 flop_type = st.selectbox("フロップタイプを選択", [
-    "High Card", "Low Card", "Paired", "Monotone",
-    "Two-tone", "Connected", "Disconnected"
+    "High Card", "Paired", "Connected", "Suited", "Low", "Draw Heavy", "Rainbow"
 ])
 
-# フロップ枚数を選択（10枚、20枚、30枚）
-flop_count = st.selectbox("フロップの枚数を選択", [10, 20, 30])
+# フロップ数（抽出数）選択
+flop_count = st.selectbox("分析に使うフロップの枚数", [10, 20, 30])
 
-# モンテカルロ試行回数を選択（10～50回）
-mc_trials = st.selectbox("モンテカルロ試行回数（フロップ抽出）", list(range(10, 51, 10)))
+# モンテカルロ試行数選択
+monte_carlo_trials = st.selectbox("モンテカルロ試行数（1フロップにつき）", [1000, 5000, 10000])
 
-if st.button("計算開始"):
-    with st.spinner("計算中..."):
-        flop_list = generate_flops_by_type(flop_type, count=flop_count)
-        avg_shift = simulate_shift_flop(hand, flop_list, opponent_hand_combos, mc_trials)
-    st.success("完了！")
-    st.write(f"平均勝率変動: {avg_shift:.2f}%")
+# 計算開始ボタン
+if st.button("ShiftFlop 計算開始"):
+    st.write("計算中です...")
+    avg_shift, top10, worst10, flop_details = simulate_shift_flop_with_ranking(
+        hand, flop_type, flop_count, monte_carlo_trials, opponent_hand_combos
+    )
+
+    st.success(f"平均勝率変動: {avg_shift:.2f}%")
+
+    st.subheader("勝率上昇 Top 10")
+    st.table(top10)
+
+    st.subheader("勝率下降 Worst 10")
+    st.table(worst10)
+
+    # CSV保存
+    csv_df = pd.DataFrame(flop_details, columns=["Flop", "Shift", "Feature"])
+    filename = f"shiftflop_{hand}_{flop_type.replace(' ', '')}.csv"
+    csv_df.to_csv(filename, index=False)
+    st.success(f"CSVファイル {filename} を保存しました。")
